@@ -6,6 +6,7 @@ import requests
 from sqlalchemy import create_engine
 from datetime import datetime
 from dotenv import load_dotenv
+import re
 
 # Load environment variables from a .env file
 load_dotenv()
@@ -56,6 +57,10 @@ class ETL:
         if 'id' in df.columns and df['id'].isnull().any():
             raise ValueError("Missing ID values detected!")
 
+        # Remove rows where critical fields are null
+        critical_columns = ['id', 'email']
+        df = df.dropna(subset=[col for col in critical_columns if col in df.columns])
+
         # Standardize date formats
         for col in df.select_dtypes(include=['object']):
             if "date" in col.lower():
@@ -72,6 +77,15 @@ class ETL:
             lower_bound = q1 - 1.5 * iqr
             upper_bound = q3 + 1.5 * iqr
             df = df[(df['amount'] >= lower_bound) & (df['amount'] <= upper_bound)]
+
+        # Check for special characters in text fields
+        for col in df.select_dtypes(include=['object']):
+            if "@" in col or "email" in col.lower():
+                df[col] = df[col].apply(lambda x: re.sub(r'[^a-zA-Z0-9@._-]', '', x) if pd.notnull(x) else x)
+
+        # Capitalize names (example)
+        if 'name' in df.columns:
+            df['name'] = df['name'].str.title()
 
         return df
 
